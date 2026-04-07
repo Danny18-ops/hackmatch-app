@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(npm run:*)",
-      "Bash(python -c \"from backend.ml.matcher import score_event_for_user, match_events; print\\('matcher.py imports OK'\\)\")"
-    ]
-  }
-}
