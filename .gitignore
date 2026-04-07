@@ -7,3 +7,6 @@ hackmatch.db
 frontend/build/
 .DS_Store
 *.egg-info/
+.claude/
+chroma_db/
+git.pkg
