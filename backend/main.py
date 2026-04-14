@@ -12,7 +12,13 @@ app = FastAPI(
 # Allow frontend to talk to backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://hackmatch.dnyaneshwariraut.com",
+        "https://hackmatch-app.vercel.app",
+        "https://hackmatch-app-danny18-ops-projects.vercel.app",
+        "https://hackmatch-3y13gsp5b-danny18-ops-projects.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
