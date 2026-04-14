@@ -37,3 +37,25 @@ def startup():
 @app.get("/")
 def root():
     return {"message": "Welcome to HackMatch API 🚀"}
+
+@app.post("/api/scrape")
+def trigger_scrape():
+    from backend.scraper.devpost import scrape_devpost
+    from backend.db.models import SessionLocal, Event
+    db = SessionLocal()
+    try:
+        events = scrape_devpost(max_pages=3)
+        added = 0
+        for e in events:
+            exists = db.query(Event).filter(Event.title == e['title']).first()
+            if not exists:
+                db.add(Event(**e))
+                added += 1
+        db.commit()
+        total = db.query(Event).count()
+        return {"message": f"Added {added} events. Total: {total}"}
+    except Exception as ex:
+        db.rollback()
+        return {"error": str(ex)}
+    finally:
+        db.close()
