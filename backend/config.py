@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     mail_from: str = ""
     mail_server: str = "smtp.gmail.com"
     mail_port: int = 587
+    
+    # Frontend API URL
+    react_app_api_url: str = "http://127.0.0.1:8000"
 
     class Config:
         env_file = ".env"
