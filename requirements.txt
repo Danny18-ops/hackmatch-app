@@ -13,8 +13,14 @@ python-dotenv
 anthropic
 requests
 beautifulsoup4
-python-jose
-passlib
-bcrypt
+httpx
 pydantic-settings
 fastapi-mail
+# ── Auth: password (JWT) + OAuth ─────────────────────────────
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt
+authlib
+itsdangerous
+# ── Transactional email ──────────────────────────────────────
+resend

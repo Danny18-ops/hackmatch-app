@@ -1,13 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from backend.db.models import init_db
-from backend.api.routes import events, users, search
+from backend.config import settings
+from backend.api.routes import events, users, search, auth
 
 app = FastAPI(
     title="HackMatch API",
     description="AI-powered hackathon & tech event discovery engine",
     version="1.0.0"
 )
+
+# Session cookie — required by Authlib to hold the OAuth state/nonce between
+# /{provider}/login and /{provider}/callback.
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
 # Allow frontend to talk to backend
 app.add_middleware(
@@ -25,6 +31,7 @@ app.add_middleware(
 )
 
 # Routes
+app.include_router(auth.router,   prefix="/api/auth",   tags=["Auth"])
 app.include_router(users.router,  prefix="/api/users",  tags=["Users"])
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(search.router, prefix="/api/search", tags=["Search"])
@@ -55,19 +62,30 @@ def _scrape_and_store(db, max_pages: int = 3) -> int:
 @app.on_event("startup")
 def startup():
     init_db()
-    # Deterministic seed: insert sample events synchronously (before serving)
-    # if the table is empty, so /api/events/ is never blank. This does NOT
-    # depend on the network or the Devpost scrape.
-    from backend.db.models import SessionLocal
-    from backend.db.seed_data import seed_initial_events
+    from backend.db.models import SessionLocal, Event
     db = SessionLocal()
     try:
-        inserted = seed_initial_events(db)
-        if inserted:
-            print(f"🌱 Seeded {inserted} sample events into an empty database")
+        if db.query(Event).count() == 0:
+            # PRIMARY source: real Devpost events (real titles + clickable URLs),
+            # stored synchronously before serving.
+            added = 0
+            try:
+                added = _scrape_and_store(db)
+                if added:
+                    print(f"🌐 Seeded {added} live Devpost events on startup")
+            except Exception as ex:
+                print(f"⚠️ Devpost scrape failed on startup: {ex}")
+
+            # FALLBACK: deterministic seed only if the scrape returned nothing,
+            # so /api/events/ is never empty.
+            if db.query(Event).count() == 0:
+                from backend.db.seed_data import seed_initial_events
+                inserted = seed_initial_events(db)
+                if inserted:
+                    print(f"🌱 Devpost unavailable — inserted {inserted} fallback events")
     except Exception as ex:
         db.rollback()
-        print(f"⚠️ Seeding failed: {ex}")
+        print(f"⚠️ Startup seeding failed: {ex}")
     finally:
         db.close()
     print("✅ HackMatch API is running!")

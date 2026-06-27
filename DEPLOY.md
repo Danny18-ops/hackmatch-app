@@ -66,18 +66,42 @@ curl -X POST https://hackmatch-app.onrender.com/api/events/geocode  # add map co
 
 ## Required environment variables
 
-**Render (backend):**
-| Var | Value |
-|---|---|
-| `DATABASE_URL` | Postgres internal URL (or via blueprint) |
-| `ANTHROPIC_API_KEY` | for AI search |
-| `GOOGLE_MAPS_API_KEY` | for "search by area" geocoding (enable Geocoding API) |
-| `SECRET_KEY` | any random string |
+### Render (backend)
 
-**Vercel (frontend) → Settings → Environment Variables, then redeploy:**
+**Core**
 | Var | Value |
 |---|---|
-| `REACT_APP_API_URL` | `https://hackmatch-app.onrender.com` |
+| `DATABASE_URL` | Postgres internal URL (or wired via the blueprint) |
+| `SECRET_KEY` | any long random string (also signs JWTs + OAuth session cookie) |
+| `ANTHROPIC_API_KEY` | AI search (optional — falls back to keyword search if unset) |
+| `GOOGLE_MAPS_API_KEY` | "search by area" geocoding (enable **Geocoding API**) |
+
+**Auth — URLs (required for OAuth redirects)**
+| Var | Value |
+|---|---|
+| `BACKEND_URL` | `https://hackmatch-app.onrender.com` (builds the OAuth callback URL) |
+| `FRONTEND_URL` | `https://hackmatch.dnyaneshwariraut.com` (where callback redirects with `?token=`) |
+
+**Auth — OAuth providers** (set the pair for each provider you enable; unset providers are simply hidden/disabled)
+| Var | Where to get it |
+|---|---|
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud Console → OAuth 2.0 Client. Authorized redirect URI: `https://hackmatch-app.onrender.com/api/auth/google/callback` |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub → Settings → Developer settings → OAuth Apps. Callback URL: `https://hackmatch-app.onrender.com/api/auth/github/callback` |
+| `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` | Meta for Developers → App → Facebook Login. Redirect URI: `https://hackmatch-app.onrender.com/api/auth/facebook/callback` |
+
+**Email (transactional, via Resend)**
+| Var | Value |
+|---|---|
+| `RESEND_API_KEY` | Resend dashboard API key (unset → emails are logged, not sent) |
+| `EMAIL_FROM` | e.g. `HackMatch <noreply@yourdomain.com>` (must be a Resend-verified domain; defaults to `onboarding@resend.dev` for testing) |
+
+> Each OAuth callback URL above must be registered **exactly** in that provider's
+> console, using your real `BACKEND_URL`.
+
+### Vercel (frontend) → Settings → Environment Variables, then redeploy
+| Var | Value |
+|---|---|
+| `REACT_APP_API_URL` | `https://hackmatch-app.onrender.com` (also builds the OAuth button links) |
 | `REACT_APP_GOOGLE_MAPS_API_KEY` | Maps JS + Places key (enable both APIs) |
 
 > CRA bakes `REACT_APP_*` in **at build time** — after changing them you must

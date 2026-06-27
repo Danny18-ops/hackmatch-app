@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { getEventStats } from '../api';
 
 const features = [
   { icon: '🤖', title: 'AI-Powered Matching', desc: 'RAG pipeline analyzes your skills and interests to surface the most relevant events for you.' },
@@ -21,17 +22,31 @@ const categories = [
 
 export default function Home() {
   const [count, setCount] = useState(0);
+  // Default categories to the static list length until real stats load.
+  const [stats, setStats] = useState({ total_events: 0, categories: categories.length });
 
+  // Fetch real counts from the backend.
   useEffect(() => {
-    const target = 45;
+    let cancelled = false;
+    getEventStats()
+      .then(res => { if (!cancelled) setStats(res.data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // Animate the counter up to the REAL total_events whenever it changes.
+  useEffect(() => {
+    const target = stats.total_events || 0;
+    if (target <= 0) { setCount(0); return; }
+    const step = Math.max(1, Math.ceil(target / 25));
     const timer = setInterval(() => {
       setCount(prev => {
         if (prev >= target) { clearInterval(timer); return target; }
-        return prev + 2;
+        return Math.min(prev + step, target);
       });
     }, 40);
     return () => clearInterval(timer);
-  }, []);
+  }, [stats.total_events]);
 
   return (
     <div style={{ padding: '3rem 2.5rem' }}>
@@ -125,9 +140,9 @@ export default function Home() {
             marginTop: '4rem', flexWrap: 'wrap'
           }}>
             {[
-              { value: `${count}+`, label: 'Live Events' },
-              { value: '6',         label: 'Categories' },
-              { value: 'RAG',       label: 'AI Pipeline' },
+              { value: `${count}`,            label: 'Live Events' },
+              { value: `${stats.categories}`, label: 'Categories' },
+              { value: 'RAG',                 label: 'AI Pipeline' },
             ].map(s => (
               <div key={s.label} style={{ textAlign: 'center' }}>
                 <div style={{

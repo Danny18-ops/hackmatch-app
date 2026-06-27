@@ -137,6 +137,18 @@ def geocode_events(db: Session = Depends(get_db)):
         "checked":  len(pending),
     }
 
+@router.get("/stats")
+def event_stats(db: Session = Depends(get_db)):
+    """Live counts for the homepage: total events and distinct categories."""
+    total = db.query(Event).count()
+    categories = (
+        db.query(Event.field)
+        .filter(Event.field.isnot(None), Event.field != "")
+        .distinct()
+        .count()
+    )
+    return {"total_events": total, "categories": categories}
+
 @router.get("/{event_id}", response_model=EventResponse)
 def get_event(event_id: int, db: Session = Depends(get_db)):
     event = db.query(Event).filter(Event.id == event_id).first()

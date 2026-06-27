@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
-import { registerUser, updatePrefs, fetchGithub, getUserByUsername } from '../api';
+import {
+  authRegister, authLogin, authMe,
+  updatePrefs, fetchGithub, setAuthToken, API_BASE_URL,
+} from '../api';
 
 const EVENT_TYPE_PRESETS = ['hackathon', 'conference', 'meetup', 'workshop'];
+
+const OAUTH_PROVIDERS = [
+  { id: 'google',   label: 'Google',   icon: '🔵' },
+  { id: 'github',   label: 'GitHub',   icon: '🐙' },
+  { id: 'facebook', label: 'Facebook', icon: '📘' },
+];
 
 const PROFILE_TABS = [
   { id: 'personal',    label: 'Personal',    icon: '👤' },
@@ -129,8 +138,51 @@ export default function Profile() {
     else addEventType(et);
   };
 
+  /* ── OAuth redirect: capture ?token= from the callback ── */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthError = params.get('error');
+    const token = params.get('token');
+    if (oauthError) {
+      setError(oauthError === 'no_email'
+        ? 'Your provider did not share an email address. Try another method.'
+        : 'Social sign-in failed. Please try again.');
+      window.history.replaceState({}, '', '/profile');
+      return;
+    }
+    if (!token) return;
+    setAuthToken(token);
+    window.history.replaceState({}, '', '/profile');
+    setLoading(true);
+    authMe()
+      .then(res => {
+        const data = res.data;
+        setUserId(data.id);
+        setUserInfo(data);
+        localStorage.setItem('hackmatch_user_id',   data.id);
+        localStorage.setItem('hackmatch_username',  data.username);
+        localStorage.setItem('hackmatch_user_info', JSON.stringify(data));
+        setPrefs({
+          skills:      data.skills      || [],
+          interests:   data.interests   || [],
+          event_types: data.event_types || [],
+        });
+        setGithub(data.github_username || '');
+        setStep('setup');
+        setSuccess(`Signed in as ${data.username}!`);
+      })
+      .catch(() => {
+        setAuthToken(null);
+        setError('Sign-in link expired. Please try again.');
+      })
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ── restore session ── */
   useEffect(() => {
+    // If we arrived from an OAuth redirect (?token=...), that effect handles it.
+    if (new URLSearchParams(window.location.search).get('token')) return;
     const savedInfo = localStorage.getItem('hackmatch_user_info');
     const savedId   = localStorage.getItem('hackmatch_user_id');
     if (savedInfo && savedId) {
@@ -157,52 +209,53 @@ export default function Profile() {
     }
   }, []);
 
-  /* ── sign up ── */
+  /* ── sign up (email/password -> JWT) ── */
   const handleSignUp = async () => {
-    if (!form.username || !form.email) { setError('Please enter username and email'); return; }
+    if (!form.username || !form.email || !form.password) {
+      setError('Please enter a username, email, and password'); return;
+    }
     setLoading(true); setError('');
     try {
-      const res = await registerUser(form);
-      setUserId(res.data.id);
-      setUserInfo(res.data);
-      localStorage.setItem('hackmatch_user_id',   res.data.id);
-      localStorage.setItem('hackmatch_username',  res.data.username);
-      localStorage.setItem('hackmatch_user_info', JSON.stringify(res.data));
+      const res = await authRegister(form);
+      const { access_token, user } = res.data;
+      setAuthToken(access_token);
+      setUserId(user.id);
+      setUserInfo(user);
+      localStorage.setItem('hackmatch_user_id',   user.id);
+      localStorage.setItem('hackmatch_username',  user.username);
+      localStorage.setItem('hackmatch_user_info', JSON.stringify(user));
       setStep('setup');
-      setSuccess(`Welcome, ${res.data.username}!`);
+      setSuccess(`Welcome, ${user.username}!`);
     } catch (e) {
       setError(e.response?.data?.detail || 'Registration failed. Please try again.');
     } finally { setLoading(false); }
   };
 
-  /* ── sign in ── */
+  /* ── sign in (username/email + password -> JWT) ── */
   const handleSignIn = async () => {
-    if (!form.username) { setError('Please enter your username'); return; }
+    if (!form.username || !form.password) {
+      setError('Please enter your username/email and password'); return;
+    }
     setLoading(true); setError('');
     try {
-      const res = await getUserByUsername(form.username);
-      const data = res.data;
-      setUserId(data.id);
-      setUserInfo(data);
-      localStorage.setItem('hackmatch_user_id',   data.id);
-      localStorage.setItem('hackmatch_username',  data.username);
-      localStorage.setItem('hackmatch_user_info', JSON.stringify(data));
+      const res = await authLogin({ username: form.username, password: form.password });
+      const { access_token, user } = res.data;
+      setAuthToken(access_token);
+      setUserId(user.id);
+      setUserInfo(user);
+      localStorage.setItem('hackmatch_user_id',   user.id);
+      localStorage.setItem('hackmatch_username',  user.username);
+      localStorage.setItem('hackmatch_user_info', JSON.stringify(user));
       setPrefs({
-        skills:      data.skills      || [],
-        interests:   data.interests   || [],
-        event_types: data.event_types || [],
+        skills:      user.skills      || [],
+        interests:   user.interests   || [],
+        event_types: user.event_types || [],
       });
-      setGithub(data.github_username || '');
-      setPersonal({
-        full_name:    data.full_name    || '',
-        university:   data.university   || '',
-        degree:       data.degree       || '',
-        linkedin_url: data.linkedin_url || '',
-      });
+      setGithub(user.github_username || '');
       setStep('setup');
-      setSuccess(`Welcome back, ${data.username}!`);
-    } catch {
-      setError('User not found. Please check your username or sign up.');
+      setSuccess(`Welcome back, ${user.username}!`);
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Invalid username/email or password.');
     } finally { setLoading(false); }
   };
 
@@ -249,6 +302,7 @@ export default function Profile() {
 
   /* ── sign out ── */
   const handleSignOut = () => {
+    setAuthToken(null);
     localStorage.removeItem('hackmatch_user_id');
     localStorage.removeItem('hackmatch_username');
     localStorage.removeItem('hackmatch_user_info');
@@ -310,6 +364,33 @@ export default function Profile() {
           background: 'var(--card)', borderRadius: '20px',
           border: '1px solid var(--border)', overflow: 'hidden',
         }}>
+          {/* OAuth — centered at the top */}
+          <div style={{ padding: '1.75rem 1.75rem 0' }}>
+            <p style={{
+              textAlign: 'center', fontSize: '0.8rem', color: 'var(--text2)',
+              marginBottom: '1rem', fontWeight: 500,
+            }}>Sign in with one click</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {OAUTH_PROVIDERS.map(p => (
+                <a key={p.id} href={`${API_BASE_URL}/api/auth/${p.id}/login`}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem',
+                    padding: '0.7rem', borderRadius: '10px', fontWeight: 600, fontSize: '0.875rem',
+                    textDecoration: 'none', background: 'var(--bg)',
+                    border: '1px solid var(--border)', color: 'var(--text)',
+                  }}>
+                  <span style={{ fontSize: '1rem' }}>{p.icon}</span>
+                  Continue with {p.label}
+                </a>
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.25rem 0 0' }}>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text2)' }}>or</span>
+              <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            </div>
+          </div>
+
           {/* Tab switcher */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
             {['signup', 'signin'].map(t => (
