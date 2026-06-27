@@ -98,8 +98,9 @@ function EventCard({ event, matchScore }) {
 }
 
 export default function Events() {
-  const [events,   setEvents]   = useState([]);
-  const [matchMap, setMatchMap] = useState({});
+  const [events,    setEvents]    = useState([]);
+  const [rawMatched, setRawMatched] = useState([]);  // unfiltered ranked matches
+  const [matchMap,  setMatchMap]  = useState({});
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState({ event_type: '', field: '', mode: '' });
   const [error,    setError]    = useState('');
@@ -108,7 +109,7 @@ export default function Events() {
   const location = useLocation();
 
   const types  = ['', 'hackathon', 'conference', 'meetup', 'workshop'];
-  const fields = ['', 'AI/ML', 'Web3', 'Cybersecurity', 'Web Development', 'General Tech', 'Social Impact'];
+  const fields = ['', 'AI/ML', 'Web3', 'Cybersecurity', 'Web Development', 'Mobile', 'General Tech', 'Social Impact'];
   const modes  = ['', 'Remote', 'In-Person'];
 
   useEffect(() => {
@@ -134,7 +135,9 @@ export default function Events() {
   }, [location.search]);
 
   useEffect(() => {
-    if (!isMatched) fetchAllEvents();
+    // Re-apply filters to the ranked matches in "My Matches"; refetch otherwise.
+    if (isMatched) setEvents(applyFilters(rawMatched));
+    else fetchAllEvents();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
@@ -159,6 +162,7 @@ export default function Events() {
       const map = {};
       matched.forEach(e => { map[e.id] = e.match_score; });
       setMatchMap(map);
+      setRawMatched(matched);
       setEvents(applyFilters(matched));
     } catch {
       fetchAllEvents();

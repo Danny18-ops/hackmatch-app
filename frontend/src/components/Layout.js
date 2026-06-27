@@ -85,27 +85,9 @@ export default function Layout({ children }) {
 
         {/* Bottom section */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {/* User info / Sign In */}
-          {username ? (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '0.6rem',
-              padding: '0.75rem', borderRadius: '10px',
-              background: '#6366f110', border: '1px solid #6366f130'
-            }}>
-              <div style={{
-                width: '28px', height: '28px', borderRadius: '50%',
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                display: 'flex', alignItems: 'center',
-                justifyContent: 'center', fontSize: '0.75rem',
-                fontWeight: 700, color: '#fff'
-              }}>{username[0].toUpperCase()}</div>
-              <span style={{
-                fontSize: '0.8rem', fontWeight: 600,
-                color: 'var(--text)', overflow: 'hidden',
-                textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-              }}>{username}</span>
-            </div>
-          ) : (
+          {/* Sign In — only when logged out (the redundant signed-in user
+              block was removed; the Profile nav link covers that). */}
+          {!username && (
             <Link to="/profile" style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               padding: '0.7rem 1rem', borderRadius: '10px',

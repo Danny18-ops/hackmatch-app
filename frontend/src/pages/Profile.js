@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { FcGoogle } from 'react-icons/fc';
+import { FaGithub, FaFacebook } from 'react-icons/fa';
 import {
   authRegister, authLogin, authMe,
   updatePrefs, fetchGithub, setAuthToken, API_BASE_URL,
@@ -7,9 +9,9 @@ import {
 const EVENT_TYPE_PRESETS = ['hackathon', 'conference', 'meetup', 'workshop'];
 
 const OAUTH_PROVIDERS = [
-  { id: 'google',   label: 'Google',   icon: '🔵' },
-  { id: 'github',   label: 'GitHub',   icon: '🐙' },
-  { id: 'facebook', label: 'Facebook', icon: '📘' },
+  { id: 'google',   label: 'Google',   Icon: FcGoogle,   color: undefined },
+  { id: 'github',   label: 'GitHub',   Icon: FaGithub,   color: 'var(--text)' },
+  { id: 'facebook', label: 'Facebook', Icon: FaFacebook, color: '#1877F2' },
 ];
 
 const PROFILE_TABS = [
@@ -371,16 +373,16 @@ export default function Profile() {
               marginBottom: '1rem', fontWeight: 500,
             }}>Sign in with one click</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              {OAUTH_PROVIDERS.map(p => (
-                <a key={p.id} href={`${API_BASE_URL}/api/auth/${p.id}/login`}
+              {OAUTH_PROVIDERS.map(({ id, label, Icon, color }) => (
+                <a key={id} href={`${API_BASE_URL}/api/auth/${id}/login`}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem',
                     padding: '0.7rem', borderRadius: '10px', fontWeight: 600, fontSize: '0.875rem',
                     textDecoration: 'none', background: 'var(--bg)',
                     border: '1px solid var(--border)', color: 'var(--text)',
                   }}>
-                  <span style={{ fontSize: '1rem' }}>{p.icon}</span>
-                  Continue with {p.label}
+                  <Icon size={18} color={color} style={{ flexShrink: 0 }} />
+                  Continue with {label}
                 </a>
               ))}
             </div>

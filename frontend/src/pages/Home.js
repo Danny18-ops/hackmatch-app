@@ -11,13 +11,15 @@ const features = [
   { icon: '🔔', title: 'Deadline Alerts', desc: 'Never miss a registration deadline with smart reminders.' },
 ];
 
+// `field` must match the real Event.field values so the /events filter lands on
+// actual results (display `label` can differ).
 const categories = [
-  { label: 'AI / ML',       icon: '🧠', color: '#6366f1' },
-  { label: 'Web3',          icon: '⛓️',  color: '#8b5cf6' },
-  { label: 'Cybersecurity', icon: '🛡️',  color: '#f59e0b' },
-  { label: 'Web Dev',       icon: '🌐', color: '#22c55e' },
-  { label: 'Mobile',        icon: '📱', color: '#ec4899' },
-  { label: 'Open Source',   icon: '💻', color: '#06b6d4' },
+  { label: 'AI / ML',       field: 'AI/ML',          icon: '🧠', color: '#6366f1' },
+  { label: 'Web3',          field: 'Web3',           icon: '⛓️',  color: '#8b5cf6' },
+  { label: 'Cybersecurity', field: 'Cybersecurity',  icon: '🛡️',  color: '#f59e0b' },
+  { label: 'Web Dev',       field: 'Web Development', icon: '🌐', color: '#22c55e' },
+  { label: 'Mobile',        field: 'Mobile',         icon: '📱', color: '#ec4899' },
+  { label: 'Social Impact', field: 'Social Impact',  icon: '🌍', color: '#06b6d4' },
 ];
 
 export default function Home() {
@@ -179,7 +181,7 @@ export default function Home() {
         }}>
           {categories.map(cat => (
             <Link
-              to={`/events?field=${encodeURIComponent(cat.label)}`}
+              to={`/events?field=${encodeURIComponent(cat.field)}`}
               key={cat.label}
               style={{
                 padding: '1.5rem 1rem', borderRadius: '14px',
