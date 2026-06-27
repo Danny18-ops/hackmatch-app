@@ -9,6 +9,11 @@ A few events carry real city coordinates so "search by area" works out of the
 box; others are Remote (no coordinates).
 """
 
+# Bump this whenever the seed data changes to force a one-time refresh of the
+# events table on the next deploy (see backend/main.py startup). "2" flushes the
+# original example.com seed rows and re-inserts the real-URL seed below.
+SEED_VERSION = "2"
+
 # Real, stable destinations used by the sample events below.
 DEVPOST = "https://devpost.com/hackathons"
 MLH = "https://mlh.io/seasons/2026/events"

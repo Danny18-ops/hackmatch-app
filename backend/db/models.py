@@ -68,6 +68,13 @@ class SavedEvent(Base):
     event_id   = Column(Integer, index=True)
     saved_at   = Column(DateTime, default=datetime.utcnow)
 
+# ── Meta (key/value app settings, e.g. applied seed version) ──
+class Meta(Base):
+    __tablename__ = "meta"
+
+    key   = Column(String, primary_key=True, index=True)
+    value = Column(String)
+
 def get_db():
     db = SessionLocal()
     try:

@@ -59,30 +59,54 @@ def _scrape_and_store(db, max_pages: int = 3) -> int:
     return added
 
 
+def _populate_events(db) -> None:
+    """Populate an (assumed empty) events table: scrape Devpost first for real
+    events, then fall back to the deterministic seed if the scrape yields none."""
+    from backend.db.models import Event
+    from backend.db.seed_data import seed_initial_events
+
+    try:
+        added = _scrape_and_store(db)
+        if added:
+            print(f"🌐 Seeded {added} live Devpost events")
+    except Exception as ex:
+        print(f"⚠️ Devpost scrape failed: {ex}")
+
+    if db.query(Event).count() == 0:
+        inserted = seed_initial_events(db)
+        if inserted:
+            print(f"🌱 Devpost unavailable — inserted {inserted} fallback events")
+
+
 @app.on_event("startup")
 def startup():
     init_db()
-    from backend.db.models import SessionLocal, Event
+    from backend.db.models import SessionLocal, Event, Meta
+    from backend.db.seed_data import SEED_VERSION
+
     db = SessionLocal()
     try:
-        if db.query(Event).count() == 0:
-            # PRIMARY source: real Devpost events (real titles + clickable URLs),
-            # stored synchronously before serving.
-            added = 0
-            try:
-                added = _scrape_and_store(db)
-                if added:
-                    print(f"🌐 Seeded {added} live Devpost events on startup")
-            except Exception as ex:
-                print(f"⚠️ Devpost scrape failed on startup: {ex}")
+        applied = db.query(Meta).filter(Meta.key == "seed_version").first()
+        applied_version = applied.value if applied else None
 
-            # FALLBACK: deterministic seed only if the scrape returned nothing,
-            # so /api/events/ is never empty.
-            if db.query(Event).count() == 0:
-                from backend.db.seed_data import seed_initial_events
-                inserted = seed_initial_events(db)
-                if inserted:
-                    print(f"🌱 Devpost unavailable — inserted {inserted} fallback events")
+        if applied_version != SEED_VERSION:
+            # Seed data changed: one-time refresh. Wipe ONLY the events table
+            # (events come solely from scrape/seed). User accounts live in a
+            # separate table and are never touched here.
+            deleted = db.query(Event).delete()
+            db.commit()
+            print(f"♻️  Seed {applied_version} -> {SEED_VERSION}: cleared {deleted} stale events")
+
+            _populate_events(db)
+
+            if applied:
+                applied.value = SEED_VERSION
+            else:
+                db.add(Meta(key="seed_version", value=SEED_VERSION))
+            db.commit()
+        elif db.query(Event).count() == 0:
+            # Safety net: matching version but the table is empty.
+            _populate_events(db)
     except Exception as ex:
         db.rollback()
         print(f"⚠️ Startup seeding failed: {ex}")
