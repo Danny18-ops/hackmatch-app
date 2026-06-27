@@ -26,7 +26,7 @@ export default function Search() {
       const res = await searchEvents(searchQuery);
       setResult(res.data);
     } catch {
-      setError('Search failed. Make sure the backend is running!');
+      setError('Search failed. The server may be waking up (free hosting sleeps after inactivity) — give it ~50s and try again.');
     } finally {
       setLoading(false);
     }

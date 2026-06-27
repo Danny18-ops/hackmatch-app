@@ -1,0 +1,31 @@
+# Render Blueprint — HackMatch FastAPI backend + a free, persistent Postgres DB.
+# In Render: New + → Blueprint → pick this repo. You'll be prompted for the two
+# secret keys (ANTHROPIC_API_KEY, GOOGLE_MAPS_API_KEY). DATABASE_URL is wired
+# automatically to the Postgres instance below, so data survives restarts.
+databases:
+  - name: hackmatch-db
+    plan: free
+    databaseName: hackmatch
+    user: hackmatch
+
+services:
+  - type: web
+    name: hackmatch-app
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hackmatch-db
+          property: connectionString
+      - key: ANTHROPIC_API_KEY
+        sync: false           # set in the dashboard (secret)
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false           # set in the dashboard (secret)
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.12.7"

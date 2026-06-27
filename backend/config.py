@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     
     # Anthropic
     anthropic_api_key: str = ""
+
+    # Google Maps (geocoding for "search by area")
+    google_maps_api_key: str = ""
     
     # GitHub OAuth
     github_client_id: str = ""
@@ -30,6 +33,10 @@ class Settings(BaseSettings):
     
     # Frontend API URL
     react_app_api_url: str = "http://127.0.0.1:8000"
+
+    # On startup, auto-scrape events if the database is empty (keeps a fresh
+    # deploy from showing a blank site). Set AUTO_SEED=false to disable.
+    auto_seed: bool = True
 
     class Config:
         env_file = ".env"

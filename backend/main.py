@@ -1,6 +1,9 @@
+import threading
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.db.models import init_db
+from backend.config import settings
 from backend.api.routes import events, users, search
 
 app = FastAPI(
@@ -29,10 +32,56 @@ app.include_router(users.router,  prefix="/api/users",  tags=["Users"])
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(search.router, prefix="/api/search", tags=["Search"])
 
+def _scrape_and_store(db, max_pages: int = 3) -> int:
+    """Scrape Devpost, geocode physical locations, and store new events.
+    Returns the number of events added. Shared by /api/scrape and auto-seed."""
+    from backend.scraper.devpost import scrape_devpost
+    from backend.db.models import Event
+    from backend.services.geocode import geocode_location, is_remote
+
+    events = scrape_devpost(max_pages=max_pages)
+    added = 0
+    for e in events:
+        if db.query(Event).filter(Event.title == e['title']).first():
+            continue
+        # Geocode physical locations so the event shows up in area search.
+        if not is_remote(e.get('location')):
+            coords = geocode_location(e['location'])
+            if coords:
+                e['latitude'], e['longitude'] = coords
+        db.add(Event(**e))
+        added += 1
+    db.commit()
+    return added
+
+
+def _seed_if_empty():
+    """If the DB has no events, scrape some in a background thread so a fresh
+    deploy never shows a blank site. Runs off the request/startup path."""
+    def _run():
+        from backend.db.models import SessionLocal, Event
+        db = SessionLocal()
+        try:
+            if db.query(Event).count() > 0:
+                return
+            print("🌱 Database empty — auto-seeding events from Devpost...")
+            added = _scrape_and_store(db)
+            print(f"✅ Auto-seeded {added} events")
+        except Exception as ex:
+            db.rollback()
+            print(f"⚠️ Auto-seed failed: {ex}")
+        finally:
+            db.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 @app.on_event("startup")
 def startup():
     init_db()
     print("✅ HackMatch API is running!")
+    if settings.auto_seed:
+        _seed_if_empty()
 
 @app.get("/")
 def root():
@@ -40,18 +89,10 @@ def root():
 
 @app.post("/api/scrape")
 def trigger_scrape():
-    from backend.scraper.devpost import scrape_devpost
     from backend.db.models import SessionLocal, Event
     db = SessionLocal()
     try:
-        events = scrape_devpost(max_pages=3)
-        added = 0
-        for e in events:
-            exists = db.query(Event).filter(Event.title == e['title']).first()
-            if not exists:
-                db.add(Event(**e))
-                added += 1
-        db.commit()
+        added = _scrape_and_store(db)
         total = db.query(Event).count()
         return {"message": f"Added {added} events. Total: {total}"}
     except Exception as ex:

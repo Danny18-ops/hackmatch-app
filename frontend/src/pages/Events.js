@@ -171,7 +171,7 @@ export default function Events() {
       const res = await getEvents({});
       setEvents(applyFilters(res.data));
     } catch {
-      setError('Could not load events. Make sure the backend is running!');
+      setError('Could not load events. The server may be waking up (free hosting sleeps after inactivity) — give it ~50s and refresh.');
     } finally { setLoading(false); }
   };
 

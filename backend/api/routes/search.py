@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.db.models import get_db, Event, User
+from backend.config import settings
 from backend.rag.pipeline import rag_search
 from backend.ml.matcher import match_events
+from backend.services.geocode import geocode_place
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -28,6 +30,23 @@ async def search_events(request: SearchRequest, db: Session = Depends(get_db)):
         }
     result = await rag_search(request.query, events)
     return result
+
+@router.get("/geocode")
+def geocode_area(q: str = Query(..., description="Area / city name to resolve to coordinates")):
+    """Resolve a typed area name to {lat, lng, formatted_address} for the
+    'search by area' feature (server-side fallback for Places Autocomplete)."""
+    if not settings.google_maps_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="GOOGLE_MAPS_API_KEY is not configured on the server.",
+        )
+    place = geocode_place(q)
+    if not place:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Could not find coordinates for '{q}'. Try a city or region name.",
+        )
+    return place
 
 @router.post("/match")
 def match_user_events(request: MatchRequest, db: Session = Depends(get_db)):

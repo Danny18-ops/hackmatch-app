@@ -1,9 +1,40 @@
 import axios from 'axios';
 
-const API = axios.create({ baseURL: process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000' });
+const API = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000',
+  // Render's free tier sleeps after ~15 min idle and takes ~50s to wake on the
+  // first request. A generous timeout lets that first request succeed.
+  timeout: 60000,
+});
+
+// Retry once on cold-start failures (timeout / network drop / 5xx) so a sleeping
+// backend doesn't surface as an error on the user's first visit.
+API.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const cfg = error.config || {};
+    const retryable =
+      !error.response ||
+      error.code === 'ECONNABORTED' ||
+      (error.response && error.response.status >= 500);
+    if (retryable && !cfg._retried) {
+      cfg._retried = true;
+      await new Promise((r) => setTimeout(r, 2500));
+      return API(cfg);
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Fire a warm-up ping as soon as the app loads so the backend starts waking
+// immediately, before the user navigates to a data page.
+API.get('/').catch(() => {});
 
 export const getEvents = (params) => API.get('/api/events/', { params });
 export const searchEvents = (query, user_id) => API.post('/api/search/query', { query, user_id });
+export const searchNearby = (lat, lng, radius_km, params = {}) =>
+  API.get('/api/events/nearby', { params: { lat, lng, radius_km, ...params } });
+export const geocodeArea = (q) => API.get('/api/search/geocode', { params: { q } });
 export const matchEvents = (user_id) => API.post('/api/search/match', { user_id });
 export const registerUser = (data) => API.post('/api/users/register', data);
 export const getUser = (id) => API.get(`/api/users/${id}`);

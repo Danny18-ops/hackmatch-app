@@ -4,10 +4,20 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 from backend.config import settings
 
-engine = create_engine(
-    settings.database_url,
-    connect_args={"check_same_thread": False}
+# Render/Heroku hand out `postgres://` URLs, but SQLAlchemy 2.x only accepts
+# the `postgresql://` scheme — normalize it so production boots.
+_database_url = settings.database_url
+if _database_url.startswith("postgres://"):
+    _database_url = _database_url.replace("postgres://", "postgresql://", 1)
+
+# `check_same_thread` is a SQLite-only connect arg. Passing it to Postgres
+# (psycopg2) on production crashes engine creation, so only set it for SQLite.
+_connect_args = (
+    {"check_same_thread": False}
+    if _database_url.startswith("sqlite")
+    else {}
 )
+engine = create_engine(_database_url, connect_args=_connect_args)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -37,6 +47,8 @@ class Event(Base):
     event_type  = Column(String)   # hackathon, conference, meetup, workshop
     field       = Column(String)   # AI/ML, Web3, Cybersecurity, etc.
     location    = Column(String)   # "Remote" or city name
+    latitude    = Column(Float, nullable=True)   # geocoded from `location` (Google Maps)
+    longitude   = Column(Float, nullable=True)   # used for "search by area" radius search
     url         = Column(String)
     deadline    = Column(String, nullable=True)
     start_date  = Column(String, nullable=True)

@@ -26,6 +26,7 @@ export default function Layout({ children }) {
     { path: '/',        label: 'Home' },
     { path: '/events',  label: 'Events' },
     { path: '/search',  label: 'AI Search' },
+    { path: '/nearby',  label: 'Search by Area' },
     { path: '/profile', label: 'Profile' },
   ];
 
