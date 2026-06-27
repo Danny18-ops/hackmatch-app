@@ -1,9 +1,6 @@
-import threading
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.db.models import init_db
-from backend.config import settings
 from backend.api.routes import events, users, search
 
 app = FastAPI(
@@ -55,33 +52,25 @@ def _scrape_and_store(db, max_pages: int = 3) -> int:
     return added
 
 
-def _seed_if_empty():
-    """If the DB has no events, scrape some in a background thread so a fresh
-    deploy never shows a blank site. Runs off the request/startup path."""
-    def _run():
-        from backend.db.models import SessionLocal, Event
-        db = SessionLocal()
-        try:
-            if db.query(Event).count() > 0:
-                return
-            print("🌱 Database empty — auto-seeding events from Devpost...")
-            added = _scrape_and_store(db)
-            print(f"✅ Auto-seeded {added} events")
-        except Exception as ex:
-            db.rollback()
-            print(f"⚠️ Auto-seed failed: {ex}")
-        finally:
-            db.close()
-
-    threading.Thread(target=_run, daemon=True).start()
-
-
 @app.on_event("startup")
 def startup():
     init_db()
+    # Deterministic seed: insert sample events synchronously (before serving)
+    # if the table is empty, so /api/events/ is never blank. This does NOT
+    # depend on the network or the Devpost scrape.
+    from backend.db.models import SessionLocal
+    from backend.db.seed_data import seed_initial_events
+    db = SessionLocal()
+    try:
+        inserted = seed_initial_events(db)
+        if inserted:
+            print(f"🌱 Seeded {inserted} sample events into an empty database")
+    except Exception as ex:
+        db.rollback()
+        print(f"⚠️ Seeding failed: {ex}")
+    finally:
+        db.close()
     print("✅ HackMatch API is running!")
-    if settings.auto_seed:
-        _seed_if_empty()
 
 @app.get("/")
 def root():

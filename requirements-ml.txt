@@ -1,0 +1,13 @@
+# ── Optional ML stack (full AI search) ───────────────────────
+# Heavy deps for the RAG semantic-search pipeline + embedding/scraper scripts.
+# These can OOM or fail to build on small instances (e.g. Render free 512MB),
+# so they are kept separate from the core runtime. Without them the API still
+# works — AI search falls back to keyword matching.
+#
+# Install on top of the core deps:
+#   pip install -r requirements.txt -r requirements-ml.txt
+chromadb
+sentence-transformers
+langchain
+langchain-anthropic
+playwright

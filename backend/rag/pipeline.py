@@ -5,7 +5,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+_client = None
+
+
+def _get_client():
+    """Lazily build the Anthropic client (only when a key is present)."""
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    return _client
 
 # ── ChromaDB + Sentence-Transformers setup ───────────────────
 CHROMA_PATH = Path(__file__).parent.parent.parent / "chroma_db"
@@ -120,31 +128,26 @@ def keyword_fallback(query: str, events: list, top_k: int = 15) -> list:
 
 # ── Public RAG entry-point ───────────────────────────────────
 
-async def rag_search(query: str, all_events: list) -> dict:
-    """
-    RAG Pipeline:
-    1. RETRIEVE — semantically find the most relevant events via ChromaDB
-    2. AUGMENT  — build a context prompt with those events
-    3. GENERATE — ask Claude to answer using that context
-    """
-    # Step 1: RETRIEVE
-    relevant_events = semantic_search(query, all_events, top_k=15)
-    retrieval_method = "semantic"
+def _retrieve(query: str, all_events: list):
+    """Return (events, method). Falls back to keyword matching when the
+    embedding/vector stack (chromadb / sentence-transformers) is unavailable."""
+    try:
+        relevant = semantic_search(query, all_events, top_k=15)
+        if relevant:
+            return relevant, "semantic"
+    except Exception as ex:  # ML stack missing, model can't load, chroma error…
+        logger.warning("Semantic retrieval unavailable (%s); using keyword fallback", ex)
 
-    if not relevant_events:
-        # Fallback: keyword matching (e.g., embeddings not yet computed)
-        relevant_events = keyword_fallback(query, all_events, top_k=15)
-        retrieval_method = "keyword"
+    relevant = keyword_fallback(query, all_events, top_k=15)
+    if relevant:
+        return relevant, "keyword"
+    return all_events[:10], "default"
 
-    if not relevant_events:
-        relevant_events = all_events[:10]
-        retrieval_method = "default"
 
-    logger.info("Retrieval method: %s, events returned: %d", retrieval_method, len(relevant_events))
-
-    # Step 2: AUGMENT
+def _generate_with_claude(query: str, relevant_events: list) -> str:
+    """Summarize the retrieved events with Claude. Raises on any API failure
+    so the caller can fall back."""
     context = build_context(relevant_events)
-
     prompt = f"""You are HackMatch, an AI assistant that helps people find the perfect hackathons,
 conferences, meetups, and tech events based on their interests and skills.
 
@@ -163,14 +166,53 @@ Based on the events above, provide a helpful, conversational response that:
 If no events match well, suggest what types of events the user should look for.
 Keep your response concise and friendly."""
 
-    # Step 3: GENERATE
-    message = client.messages.create(
+    message = _get_client().messages.create(
         model="claude-opus-4-8",
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
     )
+    return message.content[0].text
 
-    answer = message.content[0].text
+
+def _fallback_answer(query: str, relevant_events: list) -> str:
+    """Deterministic, no-LLM answer built directly from the matched events."""
+    if not relevant_events:
+        return (
+            f"**Results (keyword match)**\n\nNo events matched _{query}_. "
+            "Try broader terms — a field like AI/ML or Web3, or a city name."
+        )
+    lines = [f"**Results (keyword match)** for _{query}_:\n"]
+    for e in relevant_events[:5]:
+        meta = " · ".join(p for p in [e.event_type, e.field, e.location] if p)
+        prize = f" — 🏆 {e.prize}" if e.prize else ""
+        deadline = f" · ⏰ {e.deadline}" if e.deadline else ""
+        lines.append(f"- **{e.title}** ({meta}){prize}{deadline}")
+    lines.append("\n_AI summarization is offline — showing keyword-matched results._")
+    return "\n".join(lines)
+
+
+async def rag_search(query: str, all_events: list) -> dict:
+    """RAG pipeline with graceful degradation:
+    1. RETRIEVE — semantic search if available, else keyword matching
+    2. GENERATE — Claude summary if ANTHROPIC_API_KEY is set and the call
+       succeeds, else a deterministic keyword-based answer
+
+    Always returns a valid response, even with zero ML stack and no API key.
+    """
+    relevant_events, retrieval_method = _retrieve(query, all_events)
+    logger.info("Retrieval method: %s, events: %d", retrieval_method, len(relevant_events))
+
+    ai_powered = False
+    if settings.anthropic_api_key:
+        try:
+            answer = _generate_with_claude(query, relevant_events)
+            ai_powered = True
+        except Exception as ex:
+            logger.warning("Claude generation failed (%s); using keyword fallback answer", ex)
+            answer = _fallback_answer(query, relevant_events)
+    else:
+        logger.info("ANTHROPIC_API_KEY not set; using keyword fallback answer")
+        answer = _fallback_answer(query, relevant_events)
 
     events_data = [
         {
@@ -192,4 +234,6 @@ Keep your response concise and friendly."""
         "answer": answer,
         "events": events_data,
         "retrieval_method": retrieval_method,
+        "ai_powered": ai_powered,
+        "mode": "ai" if ai_powered else "keyword fallback",
     }

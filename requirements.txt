@@ -1,16 +1,18 @@
+# ── Core runtime ─────────────────────────────────────────────
+# Lightweight deps the API needs to install and boot reliably on a
+# constrained host (e.g. Render free tier). The app imports and serves with
+# only these; AI semantic search degrades to keyword matching when the
+# optional ML stack isn't installed.
+#
+# For full AI search, also: pip install -r requirements-ml.txt
 fastapi
 uvicorn
 sqlalchemy
 psycopg2-binary
 python-dotenv
 anthropic
-langchain
-langchain-anthropic
-chromadb
-sentence-transformers
 requests
 beautifulsoup4
-playwright
 python-jose
 passlib
 bcrypt

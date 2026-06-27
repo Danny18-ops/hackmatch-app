@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { registerUser, updatePrefs, fetchGithub } from '../api';
+import { registerUser, updatePrefs, fetchGithub, getUserByUsername } from '../api';
 
 const EVENT_TYPE_PRESETS = ['hackathon', 'conference', 'meetup', 'workshop'];
 
@@ -180,9 +180,8 @@ export default function Profile() {
     if (!form.username) { setError('Please enter your username'); return; }
     setLoading(true); setError('');
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/users/username/${form.username}`);
-      if (!res.ok) throw new Error('not found');
-      const data = await res.json();
+      const res = await getUserByUsername(form.username);
+      const data = res.data;
       setUserId(data.id);
       setUserInfo(data);
       localStorage.setItem('hackmatch_user_id',   data.id);
