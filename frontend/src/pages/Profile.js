@@ -319,7 +319,7 @@ export default function Profile() {
     <div style={{ minHeight: '100vh', padding: '2rem 2.5rem', background: 'var(--bg)' }}>
 
       {/* Page title */}
-      <div style={{ marginBottom: '1.75rem' }}>
+      <div style={{ textAlign: 'center', maxWidth: '480px', margin: '0 auto', marginBottom: '1.75rem' }}>
         <h1 style={{
           fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800,
           fontSize: '1.6rem', color: 'var(--text)', letterSpacing: '-0.02em',
@@ -360,7 +360,7 @@ export default function Profile() {
       {/* ══ AUTH STEP ══════════════════════════════════════════ */}
       {step === 'auth' && (
         <div style={{
-          maxWidth: '480px',
+          maxWidth: '480px', margin: '0 auto',
           background: 'var(--card)', borderRadius: '20px',
           border: '1px solid var(--border)', overflow: 'hidden',
         }}>
