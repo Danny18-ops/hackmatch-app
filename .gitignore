@@ -8,5 +8,6 @@ frontend/build/
 .DS_Store
 *.egg-info/
 .claude/
+CLAUDE.md
 chroma_db/
 git.pkg
