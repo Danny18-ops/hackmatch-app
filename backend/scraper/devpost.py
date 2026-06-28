@@ -2,6 +2,7 @@ import requests
 import re
 from sqlalchemy.orm import Session
 from backend.db.models import Event, SessionLocal
+from backend.services.geocode import geocode_location, is_remote
 import time
 
 
@@ -45,6 +46,8 @@ def generate_description(field: str, title: str, tags: list) -> str:
 def scrape_devpost(max_pages: int = 5):
     """Scrape real live hackathons from Devpost API"""
     events = []
+    in_person_count = 0
+    remote_count = 0
 
     for page in range(1, max_pages + 1):
         try:
@@ -86,10 +89,26 @@ def scrape_devpost(max_pages: int = 5):
                     # Field
                     field = detect_field(tags, h.get('title', ''))
 
-                    # Location
-                    location = 'Remote'
-                    if h.get('location'):
-                        location = h['location']
+                    # Location — Devpost exposes the venue/city via
+                    # `displayed_location` ({icon, location}), NOT a top-level
+                    # `location` field. `icon == "globe"` marks online events.
+                    displayed = h.get('displayed_location') or {}
+                    loc_name = (displayed.get('location') or '').strip()
+                    loc_icon = displayed.get('icon')
+
+                    latitude = longitude = None
+                    if not loc_name or loc_icon == 'globe' or is_remote(loc_name):
+                        location = 'Remote'
+                        remote_count += 1
+                    else:
+                        # Real listed venue/city — keep it and geocode for free
+                        # via Nominatim. Only resolvable locations get coords;
+                        # we never fabricate a location.
+                        location = loc_name
+                        coords = geocode_location(loc_name)
+                        if coords:
+                            latitude, longitude = coords
+                        in_person_count += 1
 
                     # Deadline
                     deadline = None
@@ -109,6 +128,8 @@ def scrape_devpost(max_pages: int = 5):
                         "event_type":  "hackathon",
                         "field":       field,
                         "location":    location,
+                        "latitude":    latitude,
+                        "longitude":   longitude,
                         "url":         h.get('url', 'https://devpost.com'),
                         "deadline":    deadline,
                         "start_date":  None,
@@ -128,6 +149,9 @@ def scrape_devpost(max_pages: int = 5):
             print(f"Error on page {page}: {e}")
             break
 
+    geocoded = sum(1 for e in events if e.get("latitude") is not None)
+    print(f"📊 Scrape split: {in_person_count} in-person ({geocoded} geocoded), "
+          f"{remote_count} remote — {len(events)} total")
     return events
 
 
