@@ -1,26 +1,40 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import useGoogleMaps from '../hooks/useGoogleMaps';
-import { searchNearby, geocodeArea } from '../api';
+import { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import iconRetina from 'leaflet/dist/images/marker-icon-2x.png';
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+import { searchNearby } from '../api';
+
+// Fix Leaflet's default marker icons under webpack/CRA (otherwise they 404).
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({ iconRetinaUrl: iconRetina, iconUrl, shadowUrl });
 
 const RADIUS_OPTIONS = [25, 50, 100, 250, 500];
+const US_CENTER = { lat: 39.5, lng: -98.35 };
 
-const TYPE_COLORS = {
-  hackathon:  '#6366f1',
-  conference: '#8b5cf6',
-  meetup:     '#22c55e',
-  workshop:   '#f59e0b',
-};
+// Free geocoding via OpenStreetMap Nominatim — no API key.
+async function geocodeCity(q) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error('geocode failed');
+  const data = await res.json();
+  if (!data.length) return null;
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), label: data[0].display_name };
+}
+
+// Imperatively move the map when the searched center changes.
+function Recenter({ lat, lng, zoom }) {
+  const map = useMap();
+  useEffect(() => {
+    if (lat != null && lng != null) map.setView([lat, lng], zoom);
+  }, [lat, lng, zoom, map]);
+  return null;
+}
 
 export default function AreaSearch() {
-  const { loaded, hasKey, error: mapsError } = useGoogleMaps();
-
-  const inputRef    = useRef(null);
-  const mapDivRef   = useRef(null);
-  const mapRef      = useRef(null);
-  const markersRef  = useRef([]);
-  const circleRef   = useRef(null);
-  const infoRef     = useRef(null);
-
+  const [query,    setQuery]    = useState('');
   const [center,   setCenter]   = useState(null);   // { lat, lng, label }
   const [radius,   setRadius]   = useState(100);
   const [events,   setEvents]   = useState([]);
@@ -28,9 +42,7 @@ export default function AreaSearch() {
   const [error,    setError]    = useState('');
   const [searched, setSearched] = useState(false);
 
-  // ── Run the radius search against the backend ──────────────
-  const runSearch = useCallback(async (c, r) => {
-    if (!c) return;
+  const runSearch = async (c, r) => {
     setLoading(true);
     setError('');
     try {
@@ -38,133 +50,30 @@ export default function AreaSearch() {
       setEvents(res.data.events || []);
       setSearched(true);
     } catch {
-      setError('Search failed. The server may be waking up (free hosting sleeps after inactivity) — give it ~50s and try again.');
+      setError('Search failed. The server may be waking up — try again in a moment.');
       setEvents([]);
+      setSearched(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  // ── Initialise the map + Places Autocomplete once loaded ───
-  useEffect(() => {
-    if (!loaded || !window.google || mapRef.current || !mapDivRef.current) return;
-
-    mapRef.current = new window.google.maps.Map(mapDivRef.current, {
-      center: { lat: 39.5, lng: -98.35 },   // continental US
-      zoom: 4,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: false,
-    });
-    infoRef.current = new window.google.maps.InfoWindow();
-
-    if (inputRef.current) {
-      const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
-        types: ['(regions)'],
-        fields: ['geometry', 'formatted_address', 'name'],
-      });
-      ac.addListener('place_changed', () => {
-        const place = ac.getPlace();
-        if (!place.geometry) return;
-        const loc = place.geometry.location;
-        const c = {
-          lat: loc.lat(),
-          lng: loc.lng(),
-          label: place.formatted_address || place.name,
-        };
-        setCenter(c);
-        runSearch(c, radius);
-      });
-    }
-  // radius intentionally excluded — its current value is read in the handler
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, runSearch]);
-
-  // ── Redraw markers whenever results / center change ────────
-  useEffect(() => {
-    if (!loaded || !mapRef.current || !center) return;
-    const map = mapRef.current;
-    const g = window.google.maps;
-
-    markersRef.current.forEach(m => m.setMap(null));
-    markersRef.current = [];
-    if (circleRef.current) circleRef.current.setMap(null);
-
-    // Radius circle + center pin
-    circleRef.current = new g.Circle({
-      map, center: { lat: center.lat, lng: center.lng },
-      radius: radius * 1000,
-      strokeColor: '#6366f1', strokeOpacity: 0.5, strokeWeight: 1,
-      fillColor: '#6366f1', fillOpacity: 0.08,
-    });
-    const centerPin = new g.Marker({
-      map, position: { lat: center.lat, lng: center.lng },
-      title: center.label,
-      icon: {
-        path: g.SymbolPath.CIRCLE, scale: 7,
-        fillColor: '#6366f1', fillOpacity: 1,
-        strokeColor: '#fff', strokeWeight: 2,
-      },
-    });
-    markersRef.current.push(centerPin);
-
-    const bounds = new g.LatLngBounds();
-    bounds.extend({ lat: center.lat, lng: center.lng });
-
-    events.forEach(ev => {
-      if (ev.latitude == null || ev.longitude == null) return;
-      const color = TYPE_COLORS[ev.type] || '#6366f1';
-      const marker = new g.Marker({
-        map, position: { lat: ev.latitude, lng: ev.longitude },
-        title: ev.title,
-        icon: {
-          path: g.SymbolPath.CIRCLE, scale: 6,
-          fillColor: color, fillOpacity: 1,
-          strokeColor: '#fff', strokeWeight: 1.5,
-        },
-      });
-      marker.addListener('click', () => {
-        infoRef.current.setContent(
-          `<div style="font-family:sans-serif;max-width:220px;color:#111">
-             <strong>${ev.title}</strong><br/>
-             <span style="font-size:12px;color:#555">${ev.type} · ${ev.location}</span><br/>
-             <span style="font-size:12px;color:#6366f1">${ev.distance_km} km away</span><br/>
-             <a href="${ev.url}" target="_blank" rel="noopener noreferrer"
-                style="font-size:12px">View event →</a>
-           </div>`
-        );
-        infoRef.current.open(map, marker);
-      });
-      markersRef.current.push(marker);
-      bounds.extend({ lat: ev.latitude, lng: ev.longitude });
-    });
-
-    if (events.length > 0) {
-      map.fitBounds(bounds, 60);
-    } else {
-      map.setCenter({ lat: center.lat, lng: center.lng });
-      map.setZoom(8);
-    }
-  }, [events, center, radius, loaded]);
-
-  // ── Manual search (typed area, resolved by the backend) ────
-  const handleManualSearch = async () => {
-    const q = inputRef.current?.value?.trim();
+  const handleSearch = async () => {
+    const q = query.trim();
     if (!q) return;
     setLoading(true);
     setError('');
     try {
-      const res = await geocodeArea(q);
-      const c = {
-        lat: res.data.lat,
-        lng: res.data.lng,
-        label: res.data.formatted_address,
-      };
-      setCenter(c);
-      await runSearch(c, radius);
-    } catch (err) {
-      const msg = err?.response?.data?.detail;
-      setError(msg || 'Could not find that area. Try a city or region name.');
+      const place = await geocodeCity(q);
+      if (!place) {
+        setError(`Couldn't find "${q}". Try a city or region name.`);
+        setLoading(false);
+        return;
+      }
+      setCenter(place);
+      await runSearch(place, radius);
+    } catch {
+      setError('Could not look up that location. Please try again.');
       setLoading(false);
     }
   };
@@ -174,33 +83,35 @@ export default function AreaSearch() {
     if (center) runSearch(center, r);
   };
 
+  const mapCenter = center || US_CENTER;
+  const mapZoom = center ? 9 : 4;
+
   return (
     <div style={{ minHeight: '100vh', padding: '2.5rem' }}>
       {/* Header */}
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontWeight: 800, fontSize: '1.75rem',
-          color: 'var(--text)', marginBottom: '0.4rem'
-        }}>
-          📍 Search by Area
-        </h1>
+          fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 800,
+          fontSize: '1.75rem', color: 'var(--text)', marginBottom: '0.4rem',
+        }}>📍 Search by Area</h1>
         <p style={{ color: 'var(--text2)', fontSize: '0.95rem' }}>
-          Find in-person hackathons and events near a city, powered by Google Maps.
+          Find in-person events near a city — free map, no sign-up. Powered by
+          OpenStreetMap.
         </p>
       </div>
 
-      {/* Search controls */}
+      {/* Controls */}
       <div style={{
         background: 'var(--card)', borderRadius: '14px',
         border: '1px solid var(--border)', padding: '1.25rem',
         marginBottom: '1.5rem', display: 'flex',
-        gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center'
+        gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center',
       }}>
         <input
-          ref={inputRef}
-          onKeyDown={e => e.key === 'Enter' && handleManualSearch()}
-          placeholder={hasKey ? 'Search a city or region…' : 'Type a city (e.g. San Diego)…'}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSearch()}
+          placeholder="Type a city (e.g. San Diego)…"
           style={{
             flex: '1 1 280px', padding: '0.75rem 1rem', borderRadius: '10px',
             background: 'var(--bg2)', border: '1px solid var(--border)',
@@ -215,110 +126,124 @@ export default function AreaSearch() {
             background: 'var(--bg2)', border: '1px solid var(--border)',
             color: 'var(--text)', fontSize: '0.9rem', cursor: 'pointer',
           }}>
-          {RADIUS_OPTIONS.map(r => (
-            <option key={r} value={r}>Within {r} km</option>
-          ))}
+          {RADIUS_OPTIONS.map(r => <option key={r} value={r}>Within {r} km</option>)}
         </select>
         <button
-          onClick={handleManualSearch}
+          onClick={handleSearch}
           disabled={loading}
           style={{
             padding: '0.75rem 1.5rem', borderRadius: '10px',
-            fontWeight: 700, fontSize: '0.9rem',
+            fontWeight: 700, fontSize: '0.9rem', border: 'none',
             background: loading ? 'var(--bg2)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
             color: loading ? 'var(--text2)' : '#fff',
-            border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+            cursor: loading ? 'not-allowed' : 'pointer',
           }}>
           {loading ? 'Searching…' : 'Search'}
         </button>
       </div>
 
-      {/* No-key notice */}
-      {!hasKey && (
-        <div style={{
-          padding: '0.9rem 1.1rem', borderRadius: '10px', marginBottom: '1.5rem',
-          background: '#f59e0b15', border: '1px solid #f59e0b40',
-          color: '#f59e0b', fontSize: '0.85rem'
-        }}>
-          🗺️ The interactive map needs a Google Maps key. Add
-          <code style={{ margin: '0 0.3rem' }}>REACT_APP_GOOGLE_MAPS_API_KEY</code>
-          to <code>frontend/.env</code> to enable it. You can still search by typing a city above.
-        </div>
-      )}
-      {mapsError && (
-        <div style={{
-          padding: '0.9rem 1.1rem', borderRadius: '10px', marginBottom: '1.5rem',
-          background: '#ef444415', border: '1px solid #ef444440', color: '#ef4444',
-          fontSize: '0.85rem'
-        }}>{mapsError}</div>
-      )}
-
-      {/* Map */}
-      {hasKey && (
-        <div
-          ref={mapDivRef}
-          style={{
-            width: '100%', height: '380px', borderRadius: '14px',
-            border: '1px solid var(--border)', marginBottom: '1.5rem',
-            background: 'var(--card)',
-          }}
-        />
-      )}
-
-      {/* Error */}
       {error && (
         <div style={{
           padding: '1rem', borderRadius: '10px', marginBottom: '1.5rem',
-          background: '#ef444415', border: '1px solid #ef444440', color: '#ef4444'
+          background: '#ef444415', border: '1px solid #ef444440', color: '#ef4444',
         }}>{error}</div>
       )}
 
-      {/* Results */}
+      {/* Map */}
+      <div style={{
+        height: '380px', borderRadius: '14px', overflow: 'hidden',
+        border: '1px solid var(--border)', marginBottom: '1.5rem',
+      }}>
+        <MapContainer center={[mapCenter.lat, mapCenter.lng]} zoom={mapZoom}
+          style={{ height: '100%', width: '100%' }} scrollWheelZoom>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {center && <Recenter lat={center.lat} lng={center.lng} zoom={9} />}
+          {center && (
+            <Circle center={[center.lat, center.lng]} radius={radius * 1000}
+              pathOptions={{ color: '#6366f1', fillColor: '#6366f1', fillOpacity: 0.08 }} />
+          )}
+          {events.map(ev => (
+            ev.latitude != null && ev.longitude != null && (
+              <Marker key={ev.id} position={[ev.latitude, ev.longitude]}>
+                <Popup>
+                  <strong>{ev.title}</strong><br />
+                  <span style={{ fontSize: '12px', color: '#555' }}>
+                    {ev.type} · {ev.location}{ev.distance_km != null ? ` · ${ev.distance_km} km` : ''}
+                  </span><br />
+                  <a href={ev.url} target="_blank" rel="noopener noreferrer">View event →</a>
+                </Popup>
+              </Marker>
+            )
+          ))}
+        </MapContainer>
+      </div>
+
+      {/* Results / empty state */}
       {searched && !loading && (
-        <>
-          <h3 style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700,
-            fontSize: '1rem', color: 'var(--text2)', marginBottom: '1rem'
+        events.length > 0 ? (
+          <>
+            <h3 style={{
+              fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 700,
+              fontSize: '1rem', color: 'var(--text2)', marginBottom: '1rem',
+            }}>
+              {events.length} event{events.length === 1 ? '' : 's'} within {radius} km
+              {center ? ` of ${center.label.split(',')[0]}` : ''}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {events.map(ev => (
+                <a key={ev.id} href={ev.url} target="_blank" rel="noopener noreferrer"
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '1rem 1.25rem', background: 'var(--card)',
+                    borderRadius: '12px', border: '1px solid var(--border)',
+                    textDecoration: 'none', gap: '1rem',
+                  }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: '0.25rem' }}>
+                      {ev.title}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
+                      {ev.type} · {ev.field} · 📍 {ev.location}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    {ev.distance_km != null && (
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#6366f1' }}>
+                        {ev.distance_km} km
+                      </div>
+                    )}
+                    {ev.prize && ev.prize !== '$0' && (
+                      <div style={{ fontSize: '0.75rem', color: '#f59e0b' }}>🏆 {ev.prize}</div>
+                    )}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </>
+        ) : !error && (
+          <div style={{
+            textAlign: 'center', padding: '2.5rem',
+            background: 'var(--card)', borderRadius: '14px', border: '1px solid var(--border)',
           }}>
-            {events.length > 0
-              ? `${events.length} event${events.length === 1 ? '' : 's'} within ${radius} km of ${center?.label || 'this area'}`
-              : `No in-person events within ${radius} km. Try a larger radius or run the geocoder (POST /api/events/geocode).`}
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {events.map(ev => (
-              <a key={ev.id} href={ev.url} target="_blank" rel="noopener noreferrer"
-                style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '1rem 1.25rem', background: 'var(--card)',
-                  borderRadius: '12px', border: '1px solid var(--border)',
-                  textDecoration: 'none', gap: '1rem'
-                }}>
-                <div>
-                  <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: '0.25rem' }}>
-                    {ev.title}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
-                    {ev.type} · {ev.field} · 📍 {ev.location}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#6366f1' }}>
-                    {ev.distance_km} km
-                  </div>
-                  {ev.prize && ev.prize !== '$0' && (
-                    <div style={{ fontSize: '0.75rem', color: '#f59e0b' }}>🏆 {ev.prize}</div>
-                  )}
-                </div>
-              </a>
-            ))}
+            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🗺️</div>
+            <p style={{ color: 'var(--text)', fontWeight: 600 }}>
+              Sorry, no events available right now.
+            </p>
+            <p style={{ color: 'var(--text2)', fontSize: '0.85rem', marginTop: '0.4rem' }}>
+              No events within {radius} km of {center ? center.label.split(',')[0] : 'this area'}.
+              Try a larger radius or a different city.
+            </p>
           </div>
-        </>
+        )
       )}
 
       {!searched && !loading && (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text2)' }}>
+        <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text2)' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>🌎</div>
-          <p>Search a city to discover events happening near you.</p>
+          <p>Search a city to discover in-person events near you.</p>
         </div>
       )}
     </div>

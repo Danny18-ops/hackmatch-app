@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.db.models import get_db, Event, User
-from backend.config import settings
 from backend.rag.pipeline import rag_search
 from backend.ml.matcher import match_events
 from backend.services.geocode import geocode_place
@@ -33,13 +32,8 @@ async def search_events(request: SearchRequest, db: Session = Depends(get_db)):
 
 @router.get("/geocode")
 def geocode_area(q: str = Query(..., description="Area / city name to resolve to coordinates")):
-    """Resolve a typed area name to {lat, lng, formatted_address} for the
-    'search by area' feature (server-side fallback for Places Autocomplete)."""
-    if not settings.google_maps_api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="GOOGLE_MAPS_API_KEY is not configured on the server.",
-        )
+    """Resolve a typed area name to {lat, lng, formatted_address} via free
+    OpenStreetMap Nominatim (no API key required)."""
     place = geocode_place(q)
     if not place:
         raise HTTPException(

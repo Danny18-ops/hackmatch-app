@@ -73,8 +73,10 @@ curl -X POST https://hackmatch-app.onrender.com/api/events/geocode  # add map co
 |---|---|
 | `DATABASE_URL` | Postgres internal URL (or wired via the blueprint) |
 | `SECRET_KEY` | any long random string (also signs JWTs + OAuth session cookie) |
-| `ANTHROPIC_API_KEY` | AI search (optional — falls back to keyword search if unset) |
-| `GOOGLE_MAPS_API_KEY` | "search by area" geocoding (enable **Geocoding API**) |
+| `ANTHROPIC_API_KEY` | AI search + chat assistant (optional — falls back to keyword search if unset) |
+
+> "Search by Area" now uses free OpenStreetMap (Leaflet map + Nominatim
+> geocoding) — **no Google Maps key or billing required** anywhere.
 
 **Auth — URLs (required for OAuth redirects)**
 | Var | Value |
@@ -102,7 +104,6 @@ curl -X POST https://hackmatch-app.onrender.com/api/events/geocode  # add map co
 | Var | Value |
 |---|---|
 | `REACT_APP_API_URL` | `https://hackmatch-app.onrender.com` (also builds the OAuth button links) |
-| `REACT_APP_GOOGLE_MAPS_API_KEY` | Maps JS + Places key (enable both APIs) |
 
 > CRA bakes `REACT_APP_*` in **at build time** — after changing them you must
 > **redeploy** the Vercel project for it to take effect.

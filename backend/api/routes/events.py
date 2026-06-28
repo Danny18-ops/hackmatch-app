@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.db.models import get_db, Event, SavedEvent
-from backend.config import settings
 from backend.services.geocode import geocode_location, haversine_km, is_remote
 from pydantic import BaseModel
 from typing import List, Optional
@@ -108,16 +107,8 @@ def nearby_events(
 
 @router.post("/geocode")
 def geocode_events(db: Session = Depends(get_db)):
-    """Backfill latitude/longitude for events that don't have them yet.
-
-    Skips remote/online events. Requires GOOGLE_MAPS_API_KEY on the server.
-    """
-    if not settings.google_maps_api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="GOOGLE_MAPS_API_KEY is not configured on the server.",
-        )
-
+    """Backfill latitude/longitude for events that don't have them yet, using
+    free OpenStreetMap Nominatim (no API key). Skips remote/online events."""
     pending = db.query(Event).filter(Event.latitude.is_(None)).all()
     geocoded, skipped = 0, 0
     for event in pending:

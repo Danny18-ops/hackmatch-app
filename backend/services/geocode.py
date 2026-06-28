@@ -1,8 +1,8 @@
 """Geocoding + distance helpers for the "search by area" feature.
 
-Turns an event's free-text `location` (e.g. "San Diego, CA") into
-latitude/longitude via the Google Maps Geocoding API, and measures the
-distance between two points so we can filter events by radius.
+Uses the free OpenStreetMap Nominatim API — no API key, no billing. Turns an
+event's free-text `location` (e.g. "San Diego, CA") into latitude/longitude,
+and measures distance between two points so we can filter events by radius.
 """
 import math
 from functools import lru_cache
@@ -10,9 +10,9 @@ from typing import Optional, Tuple
 
 import requests
 
-from backend.config import settings
-
-GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+# Nominatim's usage policy asks for an identifying User-Agent.
+_HEADERS = {"User-Agent": "HackMatch/1.0 (hackathon & event discovery app)"}
 
 # Locations that have no physical coordinates and should be skipped.
 _NON_PHYSICAL = {"remote", "online", "virtual", "worldwide", "anywhere", "tbd", "n/a", ""}
@@ -28,39 +28,36 @@ def is_remote(location: Optional[str]) -> bool:
 
 @lru_cache(maxsize=4096)
 def geocode_location(location: str) -> Optional[Tuple[float, float]]:
-    """Geocode free text to (lat, lng). Returns None if not configured,
-    remote, or no result. Cached so repeated city names cost one API call."""
+    """Geocode free text to (lat, lng). Returns None if remote, empty, or no
+    result. Cached so repeated city names cost one network call."""
     place = geocode_place(location)
     return (place["lat"], place["lng"]) if place else None
 
 
 def geocode_place(query: Optional[str]) -> Optional[dict]:
-    """Geocode a query to {lat, lng, formatted_address} or None.
+    """Geocode a query to {lat, lng, formatted_address} or None via Nominatim.
 
-    Returns None (rather than raising) when the server has no API key,
-    the query is remote/empty, or Google returns no match — callers treat
-    that as "no coordinates available".
+    Returns None (rather than raising) when the query is remote/empty or
+    Nominatim returns no match — callers treat that as "no coordinates".
     """
     if not query or is_remote(query):
         return None
-    if not settings.google_maps_api_key:
-        return None
     try:
         resp = requests.get(
-            GEOCODE_URL,
-            params={"address": query, "key": settings.google_maps_api_key},
+            NOMINATIM_URL,
+            params={"q": query, "format": "json", "limit": 1},
+            headers=_HEADERS,
             timeout=10,
         )
         data = resp.json()
-        if data.get("status") == "OK" and data.get("results"):
-            top = data["results"][0]
-            loc = top["geometry"]["location"]
+        if data:
+            top = data[0]
             return {
-                "lat": loc["lat"],
-                "lng": loc["lng"],
-                "formatted_address": top.get("formatted_address", query),
+                "lat": float(top["lat"]),
+                "lng": float(top["lon"]),
+                "formatted_address": top.get("display_name", query),
             }
-    except (requests.RequestException, ValueError, KeyError):
+    except (requests.RequestException, ValueError, KeyError, IndexError):
         return None
     return None
 

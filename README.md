@@ -6,7 +6,8 @@ ChromaDB RAG with Claude) and a React frontend.
 ## Features
 - 🤖 **AI Search** — natural-language event search via a RAG pipeline (Claude).
 - ⚡ **Smart matching** — ranks events against your skills/interests.
-- 📍 **Search by Area** — find in-person events near a city, on a Google Map.
+- 📍 **Search by Area** — find in-person events near a city, on a free OpenStreetMap (Leaflet) map — no API key.
+- 💬 **AI assistant** — always-available chat bubble to find events / ask how the app works.
 - 🐙 GitHub skill detection, saved events, live Devpost scraping.
 
 ## Backend setup
@@ -20,16 +21,15 @@ uvicorn backend.main:app --reload --port 8000
 ```
 
 Key env vars (see [.env.example](.env.example)):
-- `ANTHROPIC_API_KEY` — required for AI search.
-- `GOOGLE_MAPS_API_KEY` — required for "search by area" geocoding (enable the
-  **Geocoding API** in Google Cloud).
+- `ANTHROPIC_API_KEY` — required for AI search and the chat assistant.
 - `DATABASE_URL` — SQLite by default; a Postgres URL in production.
+- "Search by Area" uses free OpenStreetMap (Leaflet + Nominatim) — **no map API key**.
 
 Populate events, then geocode them for area search:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/scrape    # scrape live Devpost events
-curl -X POST http://127.0.0.1:8000/api/events/geocode   # backfill lat/lng
+curl -X POST http://127.0.0.1:8000/api/events/geocode   # backfill lat/lng (free Nominatim)
 ```
 
 ## Frontend setup
@@ -37,14 +37,13 @@ curl -X POST http://127.0.0.1:8000/api/events/geocode   # backfill lat/lng
 ```bash
 cd frontend
 npm install
-cp .env.example .env          # set REACT_APP_GOOGLE_MAPS_API_KEY
+cp .env.example .env          # set REACT_APP_API_URL
 npm start
 ```
 
-For the **Search by Area** map + autocomplete, set
-`REACT_APP_GOOGLE_MAPS_API_KEY` and enable the **Maps JavaScript API** and
-**Places API** in Google Cloud. Without a key you can still search by typing a
-city (the backend resolves it via the Geocoding API).
+**Search by Area** uses a free Leaflet + OpenStreetMap map with Nominatim
+geocoding — no key, no billing. Type a city and it centers the map and lists
+real events within the chosen radius.
 
 ## Search-by-area API
 
