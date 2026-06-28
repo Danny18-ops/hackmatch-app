@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FcGoogle } from 'react-icons/fc';
-import { FaGithub, FaFacebook } from 'react-icons/fa';
+import { FaGithub } from 'react-icons/fa';
 import {
   authRegister, authLogin, authMe,
   updatePrefs, fetchGithub, setAuthToken, API_BASE_URL,
@@ -9,9 +9,8 @@ import {
 const EVENT_TYPE_PRESETS = ['hackathon', 'conference', 'meetup', 'workshop'];
 
 const OAUTH_PROVIDERS = [
-  { id: 'google',   label: 'Google',   Icon: FcGoogle,   color: undefined },
-  { id: 'github',   label: 'GitHub',   Icon: FaGithub,   color: 'var(--text)' },
-  { id: 'facebook', label: 'Facebook', Icon: FaFacebook, color: '#1877F2' },
+  { id: 'google', label: 'Google', Icon: FcGoogle, color: undefined },
+  { id: 'github', label: 'GitHub', Icon: FaGithub, color: 'var(--text)' },
 ];
 
 const PROFILE_TABS = [
