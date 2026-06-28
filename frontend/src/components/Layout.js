@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import ChatWidget from './ChatWidget';
 
 export default function Layout({ children }) {
   const location = useLocation();
@@ -118,6 +119,9 @@ export default function Layout({ children }) {
       }}>
         {children}
       </main>
+
+      {/* Always-available AI assistant */}
+      <ChatWidget />
     </div>
   );
 }

@@ -52,6 +52,7 @@ export const getEventStats = () => API.get('/api/events/stats');
 export const authRegister = (data) => API.post('/api/auth/register', data);
 export const authLogin = (data) => API.post('/api/auth/login', data);
 export const authMe = () => API.get('/api/auth/me');
+export const sendChat = (messages) => API.post('/api/chat', { messages });
 export const searchEvents = (query, user_id) => API.post('/api/search/query', { query, user_id });
 export const searchNearby = (lat, lng, radius_km, params = {}) =>
   API.get('/api/events/nearby', { params: { lat, lng, radius_km, ...params } });

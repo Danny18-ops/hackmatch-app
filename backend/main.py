@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from backend.db.models import init_db
 from backend.config import settings
-from backend.api.routes import events, users, search, auth
+from backend.api.routes import events, users, search, auth, chat
 
 app = FastAPI(
     title="HackMatch API",
@@ -35,6 +35,7 @@ app.include_router(auth.router,   prefix="/api/auth",   tags=["Auth"])
 app.include_router(users.router,  prefix="/api/users",  tags=["Users"])
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(search.router, prefix="/api/search", tags=["Search"])
+app.include_router(chat.router,   prefix="/api",        tags=["Chat"])
 
 def _scrape_and_store(db, max_pages: int = 3) -> int:
     """Scrape Devpost, geocode physical locations, and store new events.
