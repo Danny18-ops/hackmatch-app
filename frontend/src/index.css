@@ -60,3 +60,14 @@ input { font-family: var(--font-body); }
 /* HackMatch assistant typing indicator */
 .hm-typing { animation: hm-blink 1.2s infinite; }
 @keyframes hm-blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+/* Leaflet (Search by Area): theme-matched popups + clean branded markers */
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+.leaflet-popup-content { margin: 0.7rem 0.9rem; font-family: var(--font-body); }
+.leaflet-popup-content a { color: #6366f1; font-weight: 600; }
+.leaflet-container a.leaflet-popup-close-button { color: var(--text2); }
+.hm-marker { background: transparent !important; border: none !important; }

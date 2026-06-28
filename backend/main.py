@@ -108,6 +108,13 @@ def startup():
         elif db.query(Event).count() == 0:
             # Safety net: matching version but the table is empty.
             _populate_events(db)
+
+        # ALWAYS ensure the curated in-person events exist (so "Search by Area"
+        # has real, mappable events), in addition to the live Devpost scrape.
+        from backend.db.seed_data import seed_in_person_events
+        added_ip = seed_in_person_events(db)
+        if added_ip:
+            print(f"📍 Ensured {added_ip} in-person seed events")
     except Exception as ex:
         db.rollback()
         print(f"⚠️ Startup seeding failed: {ex}")

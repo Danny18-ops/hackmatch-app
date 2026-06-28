@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { sendChat } from '../api';
 
 const GREETING = {
@@ -7,17 +8,31 @@ const GREETING = {
     "Hi! I'm the HackMatch assistant 👋 Ask me to find a hackathon (e.g. \"beginner AI hackathon\") or how the app works.",
 };
 
-// Turn bare http(s) URLs in a reply into clickable links.
-function renderWithLinks(text) {
-  return text.split(/(https?:\/\/[^\s)]+)/g).map((part, i) =>
-    /^https?:\/\//.test(part) ? (
-      <a key={i} href={part} target="_blank" rel="noopener noreferrer"
-        style={{ color: '#6366f1', wordBreak: 'break-all' }}>
-        {part}
-      </a>
-    ) : (
-      part
-    )
+// Render an assistant reply as Markdown (bold, bullet lists, clickable links).
+function MarkdownMessage({ text }) {
+  return (
+    <ReactMarkdown
+      components={{
+        a: ({ children, href }) => (
+          <a href={href} target="_blank" rel="noopener noreferrer"
+            style={{ color: '#6366f1', fontWeight: 600, wordBreak: 'break-word' }}>
+            {children}
+          </a>
+        ),
+        strong: ({ children }) => <strong style={{ color: 'var(--text)', fontWeight: 700 }}>{children}</strong>,
+        ul: ({ children }) => <ul style={{ paddingLeft: '1.1rem', margin: '0.35rem 0' }}>{children}</ul>,
+        ol: ({ children }) => <ol style={{ paddingLeft: '1.1rem', margin: '0.35rem 0' }}>{children}</ol>,
+        li: ({ children }) => <li style={{ marginBottom: '0.2rem' }}>{children}</li>,
+        p: ({ children }) => <p style={{ margin: '0.3rem 0' }}>{children}</p>,
+        code: ({ children }) => (
+          <code style={{ background: 'var(--bg)', padding: '0.1rem 0.3rem', borderRadius: '4px', fontSize: '0.85em' }}>
+            {children}
+          </code>
+        ),
+      }}
+    >
+      {text}
+    </ReactMarkdown>
   );
 }
 
@@ -94,14 +109,16 @@ export default function ChatWidget() {
                 alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
                 maxWidth: '85%',
                 padding: '0.6rem 0.8rem', borderRadius: '12px',
-                fontSize: '0.85rem', lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                fontSize: '0.85rem', lineHeight: 1.5,
+                whiteSpace: m.role === 'user' ? 'pre-wrap' : 'normal',
+                wordBreak: 'break-word',
                 background: m.role === 'user' ? '#6366f1' : 'var(--bg2)',
                 color: m.role === 'user' ? '#fff' : 'var(--text)',
                 border: m.role === 'user' ? 'none' : '1px solid var(--border)',
                 borderBottomRightRadius: m.role === 'user' ? '4px' : '12px',
                 borderBottomLeftRadius: m.role === 'user' ? '12px' : '4px',
               }}>
-                {m.role === 'assistant' ? renderWithLinks(m.content) : m.content}
+                {m.role === 'assistant' ? <MarkdownMessage text={m.content} /> : m.content}
               </div>
             ))}
             {loading && (
