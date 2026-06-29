@@ -18,7 +18,10 @@ from sqlalchemy.orm import Session
 
 from backend.config import settings
 from backend.db.models import get_db, User
-from backend.services.email import send_signin_email, send_welcome_email
+from backend.services.email import (
+    send_signin_email, send_welcome_email,
+    notify_admin_new_user, notify_admin_signin,
+)
 from backend.services.security import (
     create_access_token,
     get_current_user,
@@ -84,6 +87,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     send_welcome_email(user.email, user.username)
+    notify_admin_new_user(user.username, user.email, "email/password")
     return _issue(user)
 
 
@@ -95,6 +99,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(req.password, user.hashed_password):
         raise HTTPException(401, "Invalid username/email or password.")
     send_signin_email(user.email, user.username)
+    notify_admin_signin(user.username, user.email, "email/password")
     return _issue(user)
 
 
@@ -214,8 +219,10 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
 
     if created:
         send_welcome_email(user.email, user.username)
+        notify_admin_new_user(user.username, user.email, provider)
     else:
         send_signin_email(user.email, user.username)
+        notify_admin_signin(user.username, user.email, provider)
 
     jwt_token = create_access_token(user.id)
     return RedirectResponse(f"{settings.frontend_url}/profile?token={jwt_token}")

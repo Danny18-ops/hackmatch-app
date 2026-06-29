@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = "HackMatch <onboarding@resend.dev>"
 
+    # Owner/admin address that gets notified when someone signs up or signs in.
+    # Leave empty to disable owner notifications.
+    admin_notify_email: str = ""
+
     # Email (legacy Gmail SMTP — unused once Resend is configured)
     mail_username: str = ""
     mail_password: str = ""

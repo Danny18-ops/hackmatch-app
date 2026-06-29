@@ -96,6 +96,7 @@ curl -X POST https://hackmatch-app.onrender.com/api/events/geocode  # add map co
 |---|---|
 | `RESEND_API_KEY` | Resend dashboard API key (unset → emails are logged, not sent) |
 | `EMAIL_FROM` | e.g. `HackMatch <noreply@yourdomain.com>` (must be a Resend-verified domain; defaults to `onboarding@resend.dev` for testing) |
+| `ADMIN_NOTIFY_EMAIL` | **Your** email — get notified whenever someone signs up or signs in (unset → owner notifications disabled). Requires `RESEND_API_KEY` to actually deliver. |
 
 > Each OAuth callback URL above must be registered **exactly** in that provider's
 > console, using your real `BACKEND_URL`.

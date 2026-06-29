@@ -48,3 +48,38 @@ def send_signin_email(to: str, name: str) -> None:
         "<p>If it wasn't you, please reset your password.</p>"
     )
     _send(to, "New sign-in to HackMatch", html)
+
+
+# ── Owner/admin notifications ────────────────────────────────
+def _admin_html(heading: str, username: str, user_email: str, method: str) -> str:
+    from datetime import datetime, timezone
+    when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return (
+        f"<h2>{heading}</h2>"
+        "<ul>"
+        f"<li><b>Username:</b> {username}</li>"
+        f"<li><b>Email:</b> {user_email}</li>"
+        f"<li><b>Method:</b> {method}</li>"
+        f"<li><b>When:</b> {when}</li>"
+        "</ul>"
+    )
+
+
+def notify_admin_new_user(username: str, user_email: str, method: str) -> None:
+    """Email the app owner when a NEW account is created. No-ops if
+    ADMIN_NOTIFY_EMAIL is unset."""
+    admin = settings.admin_notify_email
+    if not admin:
+        return
+    _send(admin, f"🎉 New HackMatch sign-up: {username}",
+          _admin_html("🎉 New HackMatch sign-up", username, user_email, method))
+
+
+def notify_admin_signin(username: str, user_email: str, method: str) -> None:
+    """Email the app owner when an existing user signs in (uses the app).
+    No-ops if ADMIN_NOTIFY_EMAIL is unset."""
+    admin = settings.admin_notify_email
+    if not admin:
+        return
+    _send(admin, f"🔓 HackMatch sign-in: {username}",
+          _admin_html("🔓 HackMatch sign-in", username, user_email, method))
